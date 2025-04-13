@@ -685,3 +685,10 @@ fn is_root() -> bool {
     #[allow(unreachable_code)]
     crate::platform::is_root()
 }
+
+fn main() {
+    // 在程序启动时设置隐藏网络设置
+    crate::ui_interface::set_option("hide-network-settings".to_owned(), "Y".to_owned());
+    
+    // ... existing code ...
+}
