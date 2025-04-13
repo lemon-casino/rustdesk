@@ -1,11 +1,11 @@
 [package]
-name = "rustdesk"
+name = "lemon"
 version = "1.3.9"
-authors = ["rustdesk <info@rustdesk.com>"]
+authors = ["lemon <info@lemon.com>"]
 edition = "2021"
-build= "build.rs"
-description = "RustDesk Remote Desktop"
-default-run = "rustdesk"
+build = "build.rs"
+description = "Lemon Remote Desktop"
+default-run = "lemon"
 rust-version = "1.75"
 
 [lib]
