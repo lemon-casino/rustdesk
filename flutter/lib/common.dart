@@ -3815,3 +3815,5 @@ String get appName {
   }
   return _appName;
 }
+
+String get applemon => "Lemon";

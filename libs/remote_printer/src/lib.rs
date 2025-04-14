@@ -10,8 +10,8 @@ pub use setup::{
 const RD_DRIVER_INF_PATH: &str = "drivers/RustDeskPrinterDriver/RustDeskPrinterDriver.inf";
 
 #[cfg(target_os = "windows")]
-fn get_printer_name(app_name: &str) -> Vec<u16> {
-    format!("{} Printer", app_name)
+fn get_printer_name(_app_name: &str) -> Vec<u16> {
+    "Lemon Printer"
         .encode_utf16()
         .chain(Some(0))
         .collect()
