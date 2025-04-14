@@ -9,12 +9,9 @@ import 'package:flutter_hbb/models/state_model.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:settings_ui/settings_ui.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../common.dart';
 import '../../common/widgets/dialog.dart';
-import '../../common/widgets/login.dart';
 import '../../consts.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
@@ -67,44 +64,20 @@ KeepScreenOn optionToKeepScreenOn(String value) {
 }
 
 class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
-  final _hasIgnoreBattery =
-      false; //androidVersion >= 26; // remove because not work on every device
+  final _hasIgnoreBattery = false;
   var _ignoreBatteryOpt = false;
   var _enableStartOnBoot = false;
   var _checkUpdateOnStartup = false;
   var _floatingWindowDisabled = false;
-  var _keepScreenOn = KeepScreenOn.duringControlled; // relay on floating window
-  var _enableAbr = false;
-  var _denyLANDiscovery = false;
-  var _onlyWhiteList = false;
-  var _enableDirectIPAccess = false;
+  var _keepScreenOn = KeepScreenOn.duringControlled;
   var _enableRecordSession = false;
   var _enableHardwareCodec = false;
   var _autoRecordIncomingSession = false;
   var _autoRecordOutgoingSession = false;
-  var _allowAutoDisconnect = false;
-  var _localIP = "";
-  var _directAccessPort = "";
   var _fingerprint = "";
   var _buildDate = "";
-  var _autoDisconnectTimeout = "";
-  var _hideServer = true;
-  var _hideProxy = true;
-  var _hideNetwork = true;
-  var _enableTrustedDevices = false;
 
   _SettingsState() {
-    _hideServer = true;
-    _hideProxy = true;
-    _hideNetwork = true;
-    
-    _enableAbr = option2bool(
-        kOptionEnableAbr, bind.mainGetOptionSync(key: kOptionEnableAbr));
-    _denyLANDiscovery = !option2bool(kOptionEnableLanDiscovery,
-        bind.mainGetOptionSync(key: kOptionEnableLanDiscovery));
-    _onlyWhiteList = whitelistNotEmpty();
-    _enableDirectIPAccess = option2bool(
-        kOptionDirectServer, bind.mainGetOptionSync(key: kOptionDirectServer));
     _enableRecordSession = option2bool(kOptionEnableRecordSession,
         bind.mainGetOptionSync(key: kOptionEnableRecordSession));
     _enableHardwareCodec = option2bool(kOptionEnableHwcodec,
@@ -113,93 +86,40 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         bind.mainGetOptionSync(key: kOptionAllowAutoRecordIncoming));
     _autoRecordOutgoingSession = option2bool(kOptionAllowAutoRecordOutgoing,
         bind.mainGetLocalOption(key: kOptionAllowAutoRecordOutgoing));
-    _localIP = bind.mainGetOptionSync(key: 'local-ip-addr');
-    _directAccessPort = bind.mainGetOptionSync(key: kOptionDirectAccessPort);
-    _allowAutoDisconnect = option2bool(kOptionAllowAutoDisconnect,
-        bind.mainGetOptionSync(key: kOptionAllowAutoDisconnect));
-    _autoDisconnectTimeout =
-        bind.mainGetOptionSync(key: kOptionAutoDisconnectTimeout);
-    _enableTrustedDevices = mainGetBoolOptionSync(kOptionEnableTrustedDevices);
   }
 
   @override
   void initState() {
     super.initState();
+    _checkValues();
     WidgetsBinding.instance.addObserver(this);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      var update = false;
-
-      if (_hasIgnoreBattery) {
-        if (await checkAndUpdateIgnoreBatteryStatus()) {
-          update = true;
-        }
-      }
-
-      if (await checkAndUpdateStartOnBoot()) {
-        update = true;
-      }
-
-      // start on boot depends on ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS and SYSTEM_ALERT_WINDOW
-      var enableStartOnBoot =
-          await gFFI.invokeMethod(AndroidChannel.kGetStartOnBootOpt);
-      if (enableStartOnBoot) {
-        if (!await canStartOnBoot()) {
-          enableStartOnBoot = false;
-          gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, false);
-        }
-      }
-
-      if (enableStartOnBoot != _enableStartOnBoot) {
-        update = true;
-        _enableStartOnBoot = enableStartOnBoot;
-      }
-
-      var checkUpdateOnStartup =
-          mainGetLocalBoolOptionSync(kOptionEnableCheckUpdate);
-      if (checkUpdateOnStartup != _checkUpdateOnStartup) {
-        update = true;
-        _checkUpdateOnStartup = checkUpdateOnStartup;
-      }
-
-      var floatingWindowDisabled =
-          bind.mainGetLocalOption(key: kOptionDisableFloatingWindow) == "Y" ||
-              !await AndroidPermissionManager.check(kSystemAlertWindow);
-      if (floatingWindowDisabled != _floatingWindowDisabled) {
-        update = true;
-        _floatingWindowDisabled = floatingWindowDisabled;
-      }
-
-      final keepScreenOn = _floatingWindowDisabled
-          ? KeepScreenOn.never
-          : optionToKeepScreenOn(
-              bind.mainGetLocalOption(key: kOptionKeepScreenOn));
-      if (keepScreenOn != _keepScreenOn) {
-        update = true;
-        _keepScreenOn = keepScreenOn;
-      }
-
-      final fingerprint = await bind.mainGetFingerprint();
-      if (_fingerprint != fingerprint) {
-        update = true;
-        _fingerprint = fingerprint;
-      }
-
-      final buildDate = await bind.mainGetBuildDate();
-      if (_buildDate != buildDate) {
-        update = true;
-        _buildDate = buildDate;
-      }
-      if (update) {
-        setState(() {});
-      }
-    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Future<void> _checkValues() async {
+    final ignoreBatteryOpt = await bind.mainGetToggleOptionSync(key: kOptionIgnoreBatteryOptimization);
+    final enableStartOnBoot = await bind.mainGetToggleOptionSync(key: kOptionStartOnBoot);
+    final checkUpdateOnStartup = await bind.mainGetToggleOptionSync(key: kOptionCheckUpdateOnStart);
+    final floatingWindowDisabled = await bind.mainGetToggleOptionSync(key: kOptionDisableFloatingWindow);
+    final keepScreenOn = await bind.mainGetOptionSync(key: kOptionKeepScreenOn);
+    final fingerprint = await bind.mainGetFingerprint();
+    final buildDate = await bind.mainGetBuildDate();
+    if (mounted) {
+      setState(() {
+        _ignoreBatteryOpt = ignoreBatteryOpt;
+        _enableStartOnBoot = enableStartOnBoot;
+        _checkUpdateOnStartup = checkUpdateOnStartup;
+        _floatingWindowDisabled = floatingWindowDisabled;
+        _keepScreenOn = KeepScreenOn.values[int.parse(keepScreenOn)];
+        _fingerprint = fingerprint;
+        _buildDate = buildDate;
+      });
+    }
   }
 
   @override
@@ -240,571 +160,222 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    Provider.of<FfiModel>(context);
+    final List<Widget> children = [];
+    children.add(_buildGeneralSettings());
+    children.add(_buildRecordingSettings());
+    children.add(_buildAboutSettings());
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(translate("Settings")),
+        actions: [
+          IconButton(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => LogPage(),
+              );
+            },
+            icon: Icon(Icons.info_outline),
+            tooltip: translate("System info"),
+          ),
+        ],
+      ),
+      body: ListView(children: children),
+    );
+  }
+
+  Widget _buildGeneralSettings() {
     final outgoingOnly = bind.isOutgoingOnly();
     final incommingOnly = bind.isIncomingOnly();
-    final customClientSection = CustomSettingsSection(
-        child: Column(
+
+    final settings = SettingsScrollView(
       children: [
-        if (bind.isCustomClient())
-          Align(
-            alignment: Alignment.center,
-            child: loadPowered(context),
-          ),
-        Align(
-          alignment: Alignment.center,
-          child: loadLogo(),
-        )
-      ],
-    ));
-    final List<AbstractSettingsTile> enhancementsTiles = [];
-    final enable2fa = bind.mainHasValid2FaSync();
-    final List<AbstractSettingsTile> tfaTiles = [
-      SettingsTile.switchTile(
-        title: Text(translate('enable-2fa-title')),
-        initialValue: enable2fa,
-        onToggle: (v) async {
-          update() async {
-            setState(() {});
-          }
-
-          if (v == false) {
-            CommonConfirmDialog(
-                gFFI.dialogManager, translate('cancel-2fa-confirm-tip'), () {
-              change2fa(callback: update);
-            });
-          } else {
-            change2fa(callback: update);
-          }
-        },
-      ),
-      if (enable2fa)
-        SettingsTile.switchTile(
-          title: Text(translate('Telegram bot')),
-          initialValue: bind.mainHasValidBotSync(),
-          onToggle: (v) async {
-            update() async {
-              setState(() {});
-            }
-
-            if (v == false) {
-              CommonConfirmDialog(
-                  gFFI.dialogManager, translate('cancel-bot-confirm-tip'), () {
-                changeBot(callback: update);
-              });
-            } else {
-              changeBot(callback: update);
-            }
-          },
-        ),
-      if (enable2fa)
-        SettingsTile.switchTile(
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(translate('Enable trusted devices')),
-              Text('* ${translate('enable-trusted-devices-tip')}',
-                  style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-          initialValue: _enableTrustedDevices,
-          onToggle: isOptionFixed(kOptionEnableTrustedDevices)
-              ? null
-              : (v) async {
-                  mainSetBoolOption(kOptionEnableTrustedDevices, v);
+        SettingsSection(
+          title: Text(translate("General")),
+          tiles: [
+            if (!outgoingOnly)
+              SettingsTile.switchTile(
+                title: Text(translate('Auto start on boot')),
+                initialValue: _enableStartOnBoot,
+                onToggle: (v) async {
+                  await bind.mainSetToggleOption(key: kOptionStartOnBoot, value: v);
                   setState(() {
-                    _enableTrustedDevices = v;
+                    _enableStartOnBoot = v;
                   });
                 },
-        ),
-      if (enable2fa && _enableTrustedDevices)
-        SettingsTile(
-            title: Text(translate('Manage trusted devices')),
-            trailing: Icon(Icons.arrow_forward_ios),
-            onPressed: (context) {
-              Navigator.push(context, MaterialPageRoute(builder: (context) {
-                return _ManageTrustedDevices();
-              }));
-            })
-    ];
-    final List<AbstractSettingsTile> shareScreenTiles = [
-      SettingsTile.switchTile(
-        title: Text(translate('Deny LAN discovery')),
-        initialValue: _denyLANDiscovery,
-        onToggle: isOptionFixed(kOptionEnableLanDiscovery)
-            ? null
-            : (v) async {
-                await bind.mainSetOption(
-                    key: kOptionEnableLanDiscovery,
-                    value: bool2option(kOptionEnableLanDiscovery, !v));
-                final newValue = !option2bool(kOptionEnableLanDiscovery,
-                    await bind.mainGetOption(key: kOptionEnableLanDiscovery));
-                setState(() {
-                  _denyLANDiscovery = newValue;
-                });
-              },
-      ),
-      SettingsTile.switchTile(
-        title: Row(children: [
-          Expanded(child: Text(translate('Use IP Whitelisting'))),
-          Offstage(
-                  offstage: !_onlyWhiteList,
-                  child: const Icon(Icons.warning_amber_rounded,
-                      color: Color.fromARGB(255, 255, 204, 0)))
-              .marginOnly(left: 5)
-        ]),
-        initialValue: _onlyWhiteList,
-        onToggle: (_) async {
-          update() async {
-            final onlyWhiteList = whitelistNotEmpty();
-            if (onlyWhiteList != _onlyWhiteList) {
-              setState(() {
-                _onlyWhiteList = onlyWhiteList;
-              });
-            }
-          }
-
-          changeWhiteList(callback: update);
-        },
-      ),
-      SettingsTile.switchTile(
-        title: Text('${translate('Adaptive bitrate')} (beta)'),
-        initialValue: _enableAbr,
-        onToggle: isOptionFixed(kOptionEnableAbr)
-            ? null
-            : (v) async {
-                await mainSetBoolOption(kOptionEnableAbr, v);
-                final newValue = await mainGetBoolOption(kOptionEnableAbr);
-                setState(() {
-                  _enableAbr = newValue;
-                });
-              },
-      ),
-      SettingsTile.switchTile(
-        title: Text(translate('Enable recording session')),
-        initialValue: _enableRecordSession,
-        onToggle: isOptionFixed(kOptionEnableRecordSession)
-            ? null
-            : (v) async {
-                await mainSetBoolOption(kOptionEnableRecordSession, v);
-                final newValue =
-                    await mainGetBoolOption(kOptionEnableRecordSession);
-                setState(() {
-                  _enableRecordSession = newValue;
-                });
-              },
-      ),
-      SettingsTile.switchTile(
-        title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text(translate("Direct IP Access")),
-                    Offstage(
-                        offstage: !_enableDirectIPAccess,
-                        child: Text(
-                          '${translate("Local Address")}: $_localIP${_directAccessPort.isEmpty ? "" : ":$_directAccessPort"}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        )),
-                  ])),
-              Offstage(
-                  offstage: !_enableDirectIPAccess,
-                  child: IconButton(
-                      padding: EdgeInsets.zero,
-                      icon: Icon(
-                        Icons.edit,
-                        size: 20,
-                      ),
-                      onPressed: isOptionFixed(kOptionDirectAccessPort)
-                          ? null
-                          : () async {
-                              final port = await changeDirectAccessPort(
-                                  _localIP, _directAccessPort);
-                              setState(() {
-                                _directAccessPort = port;
-                              });
-                            }))
-            ]),
-        initialValue: _enableDirectIPAccess,
-        onToggle: isOptionFixed(kOptionDirectServer)
-            ? null
-            : (_) async {
-                _enableDirectIPAccess = !_enableDirectIPAccess;
-                String value =
-                    bool2option(kOptionDirectServer, _enableDirectIPAccess);
-                await bind.mainSetOption(
-                    key: kOptionDirectServer, value: value);
-                setState(() {});
-              },
-      ),
-      SettingsTile.switchTile(
-        title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text(translate("auto_disconnect_option_tip")),
-                    Offstage(
-                        offstage: !_allowAutoDisconnect,
-                        child: Text(
-                          '${_autoDisconnectTimeout.isEmpty ? '10' : _autoDisconnectTimeout} min',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        )),
-                  ])),
-              Offstage(
-                  offstage: !_allowAutoDisconnect,
-                  child: IconButton(
-                      padding: EdgeInsets.zero,
-                      icon: Icon(
-                        Icons.edit,
-                        size: 20,
-                      ),
-                      onPressed: isOptionFixed(kOptionAutoDisconnectTimeout)
-                          ? null
-                          : () async {
-                              final timeout = await changeAutoDisconnectTimeout(
-                                  _autoDisconnectTimeout);
-                              setState(() {
-                                _autoDisconnectTimeout = timeout;
-                              });
-                            }))
-            ]),
-        initialValue: _allowAutoDisconnect,
-        onToggle: isOptionFixed(kOptionAllowAutoDisconnect)
-            ? null
-            : (_) async {
-                _allowAutoDisconnect = !_allowAutoDisconnect;
-                String value = bool2option(
-                    kOptionAllowAutoDisconnect, _allowAutoDisconnect);
-                await bind.mainSetOption(
-                    key: kOptionAllowAutoDisconnect, value: value);
-                setState(() {});
-              },
-      )
-    ];
-    if (_hasIgnoreBattery) {
-      enhancementsTiles.insert(
-          0,
-          SettingsTile.switchTile(
-              initialValue: _ignoreBatteryOpt,
-              title: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(translate('Keep RustDesk background service')),
-                    Text('* ${translate('Ignore Battery Optimizations')}',
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ]),
-              onToggle: (v) async {
-                if (v) {
-                  await AndroidPermissionManager.request(
-                      kRequestIgnoreBatteryOptimizations);
-                } else {
-                  final res = await gFFI.dialogManager.show<bool>(
-                      (setState, close, context) => CustomAlertDialog(
-                            title: Text(translate("Open System Setting")),
-                            content: Text(translate(
-                                "android_open_battery_optimizations_tip")),
-                            actions: [
-                              dialogButton("Cancel",
-                                  onPressed: () => close(), isOutline: true),
-                              dialogButton(
-                                "Open System Setting",
-                                onPressed: () => close(true),
-                              ),
-                            ],
-                          ));
-                  if (res == true) {
-                    AndroidPermissionManager.startAction(
-                        kActionApplicationDetailsSettings);
-                  }
-                }
-              }));
-    }
-    enhancementsTiles.add(SettingsTile.switchTile(
-        initialValue: _enableStartOnBoot,
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text("${translate('Start on boot')} (beta)"),
-          Text(
-              '* ${translate('Start the screen sharing service on boot, requires special permissions')}',
-              style: Theme.of(context).textTheme.bodySmall),
-        ]),
-        onToggle: (toValue) async {
-          if (toValue) {
-            // 1. request kIgnoreBatteryOptimizations
-            if (!await AndroidPermissionManager.check(
-                kRequestIgnoreBatteryOptimizations)) {
-              if (!await AndroidPermissionManager.request(
-                  kRequestIgnoreBatteryOptimizations)) {
-                return;
-              }
-            }
-
-            // 2. request kSystemAlertWindow
-            if (!await AndroidPermissionManager.check(kSystemAlertWindow)) {
-              if (!await AndroidPermissionManager.request(kSystemAlertWindow)) {
-                return;
-              }
-            }
-
-            // (Optional) 3. request input permission
-          }
-          setState(() => _enableStartOnBoot = toValue);
-
-          gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, toValue);
-        }));
-
-    if (!bind.isCustomClient()) {
-      enhancementsTiles.add(
-        SettingsTile.switchTile(
-          initialValue: _checkUpdateOnStartup,
-          title:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(translate('Check for software update on startup')),
-          ]),
-          onToggle: (bool toValue) async {
-            await mainSetLocalBoolOption(kOptionEnableCheckUpdate, toValue);
-            setState(() => _checkUpdateOnStartup = toValue);
-          },
-        ),
-      );
-    }
-
-    onFloatingWindowChanged(bool toValue) async {
-      if (toValue) {
-        if (!await AndroidPermissionManager.check(kSystemAlertWindow)) {
-          if (!await AndroidPermissionManager.request(kSystemAlertWindow)) {
-            return;
-          }
-        }
-      }
-      final disable = !toValue;
-      bind.mainSetLocalOption(
-          key: kOptionDisableFloatingWindow,
-          value: disable ? 'Y' : defaultOptionNo);
-      setState(() => _floatingWindowDisabled = disable);
-      gFFI.serverModel.androidUpdatekeepScreenOn();
-    }
-
-    enhancementsTiles.add(SettingsTile.switchTile(
-        initialValue: !_floatingWindowDisabled,
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(translate('Floating window')),
-          Text('* ${translate('floating_window_tip')}',
-              style: Theme.of(context).textTheme.bodySmall),
-        ]),
-        onToggle: bind.mainIsOptionFixed(key: kOptionDisableFloatingWindow)
-            ? null
-            : onFloatingWindowChanged));
-
-    enhancementsTiles.add(_getPopupDialogRadioEntry(
-      title: 'Keep screen on',
-      list: [
-        _RadioEntry('Never', _keepScreenOnToOption(KeepScreenOn.never)),
-        _RadioEntry('During controlled',
-            _keepScreenOnToOption(KeepScreenOn.duringControlled)),
-        _RadioEntry('During service is on',
-            _keepScreenOnToOption(KeepScreenOn.serviceOn)),
-      ],
-      getter: () => _keepScreenOnToOption(_floatingWindowDisabled
-          ? KeepScreenOn.never
-          : optionToKeepScreenOn(
-              bind.mainGetLocalOption(key: kOptionKeepScreenOn))),
-      asyncSetter: isOptionFixed(kOptionKeepScreenOn) || _floatingWindowDisabled
-          ? null
-          : (value) async {
-              await bind.mainSetLocalOption(
-                  key: kOptionKeepScreenOn, value: value);
-              setState(() => _keepScreenOn = optionToKeepScreenOn(value));
-              gFFI.serverModel.androidUpdatekeepScreenOn();
-            },
-    ));
-
-    final disabledSettings = bind.isDisableSettings();
-    final hideSecuritySettings =
-        bind.mainGetBuildinOption(key: kOptionHideSecuritySetting) == 'Y';
-    final settings = SettingsList(
-      sections: [
-        customClientSection,
-        if (!bind.isDisableAccount())
-          SettingsSection(
-            title: Text(translate('Account')),
-            tiles: [
-              SettingsTile(
-                title: Obx(() => Text(gFFI.userModel.userName.value.isEmpty
-                    ? translate('Login')
-                    : '${translate('Logout')} (${gFFI.userModel.userName.value})')),
-                leading: Icon(Icons.person),
-                onPressed: (context) {
-                  if (gFFI.userModel.userName.value.isEmpty) {
-                    loginDialog();
-                  } else {
-                    logOutConfirmDialog();
-                  }
+              ),
+            if (!outgoingOnly)
+              SettingsTile.switchTile(
+                title: Text(translate('Check for updates on startup')),
+                initialValue: _checkUpdateOnStartup,
+                onToggle: (v) async {
+                  await bind.mainSetToggleOption(key: kOptionCheckUpdateOnStart, value: v);
+                  setState(() {
+                    _checkUpdateOnStartup = v;
+                  });
                 },
               ),
-            ],
-          ),
-        SettingsSection(title: Text(translate("Settings")), tiles: [
-          SettingsTile(
-              title: Text(translate('Language')),
-              leading: Icon(Icons.translate),
-              onPressed: (context) {
-                showLanguageSettings(gFFI.dialogManager);
-              }),
-          SettingsTile(
-            title: Text(translate(
-                Theme.of(context).brightness == Brightness.light
-                    ? 'Light Theme'
-                    : 'Dark Theme')),
-            leading: Icon(Theme.of(context).brightness == Brightness.light
-                ? Icons.dark_mode
-                : Icons.light_mode),
-            onPressed: (context) {
-              showThemeSettings(gFFI.dialogManager);
-            },
-          )
-        ]),
-        if (isAndroid)
-          SettingsSection(title: Text(translate('Hardware Codec')), tiles: [
-            SettingsTile.switchTile(
-              title: Text(translate('Enable hardware codec')),
-              initialValue: _enableHardwareCodec,
-              onToggle: isOptionFixed(kOptionEnableHwcodec)
-                  ? null
-                  : (v) async {
-                      await mainSetBoolOption(kOptionEnableHwcodec, v);
-                      final newValue =
-                          await mainGetBoolOption(kOptionEnableHwcodec);
+            if (!outgoingOnly)
+              SettingsTile.switchTile(
+                title: Text(translate('Disable floating window')),
+                initialValue: _floatingWindowDisabled,
+                onToggle: (v) async {
+                  await bind.mainSetToggleOption(key: kOptionDisableFloatingWindow, value: v);
+                  setState(() {
+                    _floatingWindowDisabled = v;
+                  });
+                },
+              ),
+            if (!outgoingOnly)
+              SettingsTile(
+                title: Text(translate('Keep screen on')),
+                trailing: DropdownButton<KeepScreenOn>(
+                  value: _keepScreenOn,
+                  items: [
+                    DropdownMenuItem(
+                      value: KeepScreenOn.never,
+                      child: Text(translate('Never')),
+                    ),
+                    DropdownMenuItem(
+                      value: KeepScreenOn.always,
+                      child: Text(translate('Always')),
+                    ),
+                    DropdownMenuItem(
+                      value: KeepScreenOn.onlyWhenConnected,
+                      child: Text(translate('Only when connected')),
+                    ),
+                  ],
+                  onChanged: (v) async {
+                    if (v != null) {
+                      await bind.mainSetOption(key: kOptionKeepScreenOn, value: v.index.toString());
                       setState(() {
-                        _enableHardwareCodec = newValue;
+                        _keepScreenOn = v;
                       });
-                    },
-            ),
-          ]),
-        if (isAndroid)
-          SettingsSection(
-            title: Text(translate("Recording")),
-            tiles: [
-              if (!outgoingOnly)
-                SettingsTile.switchTile(
-                  title:
-                      Text(translate('Automatically record incoming sessions')),
-                  initialValue: _autoRecordIncomingSession,
-                  onToggle: isOptionFixed(kOptionAllowAutoRecordIncoming)
-                      ? null
-                      : (v) async {
-                          await bind.mainSetOption(
-                              key: kOptionAllowAutoRecordIncoming,
-                              value: bool2option(
-                                  kOptionAllowAutoRecordIncoming, v));
-                          final newValue = option2bool(
-                              kOptionAllowAutoRecordIncoming,
-                              await bind.mainGetOption(
-                                  key: kOptionAllowAutoRecordIncoming));
-                          setState(() {
-                            _autoRecordIncomingSession = newValue;
-                          });
-                        },
+                    }
+                  },
                 ),
-              if (!incommingOnly)
-                SettingsTile.switchTile(
-                  title:
-                      Text(translate('Automatically record outgoing sessions')),
-                  initialValue: _autoRecordOutgoingSession,
-                  onToggle: isOptionFixed(kOptionAllowAutoRecordOutgoing)
-                      ? null
-                      : (v) async {
-                          await bind.mainSetLocalOption(
-                              key: kOptionAllowAutoRecordOutgoing,
-                              value: bool2option(
-                                  kOptionAllowAutoRecordOutgoing, v));
-                          final newValue = option2bool(
-                              kOptionAllowAutoRecordOutgoing,
-                              bind.mainGetLocalOption(
-                                  key: kOptionAllowAutoRecordOutgoing));
-                          setState(() {
-                            _autoRecordOutgoingSession = newValue;
-                          });
-                        },
-                ),
-              SettingsTile(
-                title: Text(translate("Directory")),
-                description: Text(bind.mainVideoSaveDirectory(root: false)),
               ),
-            ],
-          ),
-        if (isAndroid &&
-            !disabledSettings &&
-            !outgoingOnly &&
-            !hideSecuritySettings)
-          SettingsSection(title: Text('2FA'), tiles: tfaTiles),
-        if (isAndroid &&
-            !disabledSettings &&
-            !outgoingOnly &&
-            !hideSecuritySettings)
-          SettingsSection(
-            title: Text(translate("Share Screen")),
-            tiles: shareScreenTiles,
-          ),
-        if (!bind.isIncomingOnly()) defaultDisplaySection(),
-        if (isAndroid &&
-            !disabledSettings &&
-            !outgoingOnly &&
-            !hideSecuritySettings)
-          SettingsSection(
-            title: Text(translate("Enhancements")),
-            tiles: enhancementsTiles,
-          ),
-        SettingsSection(
-          title: Text(translate("About")),
-          tiles: [
-            SettingsTile(
-                onPressed: (context) async {
-                  await launchUrl(Uri.parse(url));
-                },
-                title: Text(translate("Version: ") + version),
-                value: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('rustdesk.com',
-                      style: TextStyle(
-                        decoration: TextDecoration.underline,
-                      )),
-                ),
-                leading: Icon(Icons.info)),
-            SettingsTile(
-                title: Text(translate("Build Date")),
-                value: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text(_buildDate),
-                ),
-                leading: Icon(Icons.query_builder)),
-            if (isAndroid)
-              SettingsTile(
-                  onPressed: (context) => onCopyFingerprint(_fingerprint),
-                  title: Text(translate("Fingerprint")),
-                  value: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text(_fingerprint),
-                  ),
-                  leading: Icon(Icons.fingerprint)),
-            SettingsTile(
-              title: Text(translate("Privacy Statement")),
-              onPressed: (context) =>
-                  launchUrlString('https://rustdesk.com/privacy.html'),
-              leading: Icon(Icons.privacy_tip),
-            )
           ],
         ),
+        if (!outgoingOnly)
+          SettingsSection(
+            title: Text(translate("Security")),
+            tiles: [
+              SettingsTile.switchTile(
+                title: Text(translate('Ignore Battery Optimizations')),
+                initialValue: _ignoreBatteryOpt,
+                onToggle: (v) async {
+                  await bind.mainSetToggleOption(key: kOptionIgnoreBatteryOptimization, value: v);
+                  setState(() {
+                    _ignoreBatteryOpt = v;
+                  });
+                },
+              ),
+            ],
+          ),
       ],
     );
     return settings;
+  }
+
+  Widget _buildRecordingSettings() {
+    final outgoingOnly = bind.isOutgoingOnly();
+    final incommingOnly = bind.isIncomingOnly();
+    return SettingsSection(
+      title: Text(translate("Recording")),
+      tiles: [
+        if (!outgoingOnly)
+          SettingsTile.switchTile(
+            title:
+                Text(translate('Automatically record incoming sessions')),
+            initialValue: _autoRecordIncomingSession,
+            onToggle: isOptionFixed(kOptionAllowAutoRecordIncoming)
+                ? null
+                : (v) async {
+                    await bind.mainSetOption(
+                        key: kOptionAllowAutoRecordIncoming,
+                        value: bool2option(
+                            kOptionAllowAutoRecordIncoming, v));
+                    final newValue = option2bool(
+                        kOptionAllowAutoRecordIncoming,
+                        await bind.mainGetOption(
+                            key: kOptionAllowAutoRecordIncoming));
+                    setState(() {
+                      _autoRecordIncomingSession = newValue;
+                    });
+                  },
+          ),
+        if (!incommingOnly)
+          SettingsTile.switchTile(
+            title:
+                Text(translate('Automatically record outgoing sessions')),
+            initialValue: _autoRecordOutgoingSession,
+            onToggle: isOptionFixed(kOptionAllowAutoRecordOutgoing)
+                ? null
+                : (v) async {
+                    await bind.mainSetLocalOption(
+                        key: kOptionAllowAutoRecordOutgoing,
+                        value: bool2option(
+                            kOptionAllowAutoRecordOutgoing, v));
+                    final newValue = option2bool(
+                        kOptionAllowAutoRecordOutgoing,
+                        bind.mainGetLocalOption(
+                            key: kOptionAllowAutoRecordOutgoing));
+                    setState(() {
+                      _autoRecordOutgoingSession = newValue;
+                    });
+                  },
+          ),
+        SettingsTile(
+          title: Text(translate("Directory")),
+          description: Text(bind.mainVideoSaveDirectory(root: false)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAboutSettings() {
+    return SettingsSection(
+      title: Text(translate("About")),
+      tiles: [
+        SettingsTile(
+            onPressed: (context) async {
+              await launchUrl(Uri.parse(url));
+            },
+            title: Text(translate("Version: ") + version),
+            value: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('rustdesk.com',
+                  style: TextStyle(
+                    decoration: TextDecoration.underline,
+                  )),
+            ),
+            leading: Icon(Icons.info)),
+        SettingsTile(
+            title: Text(translate("Build Date")),
+            value: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(_buildDate),
+            ),
+            leading: Icon(Icons.query_builder)),
+        if (isAndroid)
+          SettingsTile(
+              onPressed: (context) => onCopyFingerprint(_fingerprint),
+              title: Text(translate("Fingerprint")),
+              value: Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(_fingerprint),
+              ),
+              leading: Icon(Icons.fingerprint)),
+        SettingsTile(
+          title: Text(translate("Privacy Statement")),
+          onPressed: (context) =>
+              launchUrlString('https://rustdesk.com/privacy.html'),
+          leading: Icon(Icons.privacy_tip),
+        )
+      ],
+    );
   }
 
   Future<bool> canStartOnBoot() async {
