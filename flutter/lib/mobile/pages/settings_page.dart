@@ -118,8 +118,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
     _hideServer =
         bind.mainGetBuildinOption(key: kOptionHideServerSetting) == 'Y';
     _hideProxy = bind.mainGetBuildinOption(key: kOptionHideProxySetting) == 'Y';
-    _hideNetwork =
-        bind.mainGetBuildinOption(key: kOptionHideNetworkSetting) == 'Y';
     _enableTrustedDevices = mainGetBoolOptionSync(kOptionEnableTrustedDevices);
   }
 
