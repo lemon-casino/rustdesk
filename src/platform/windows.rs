@@ -1040,7 +1040,7 @@ fn get_default_install_info() -> (String, String, String, String) {
 }
 
 fn get_default_install_path() -> String {
-    let mut pf = "C:\\Program Files".to_owned();
+    let mut pf = format!("C:\\Program Files");
     if let Ok(x) = std::env::var("ProgramFiles") {
         if std::path::Path::new(&x).exists() {
             pf = x;
@@ -1053,7 +1053,7 @@ fn get_default_install_path() -> String {
             pf = tmp;
         }
     }
-    format!("{}\\{}", pf, crate::get_app_name())
+    format!("{}\\Lemon", pf)
 }
 
 pub fn check_update_broker_process() -> ResultType<()> {
